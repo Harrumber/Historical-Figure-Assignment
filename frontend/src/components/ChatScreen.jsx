@@ -1,4 +1,4 @@
-import "./chatScreen.css";
+import "./ChatScreen.css";
 
 export default function ChatScreen({
   figureName,
@@ -49,7 +49,7 @@ export default function ChatScreen({
                     key={idx}
                     type="button"
                     className="choice-btn"
-                    onClick={() => onSelectChoice(choice)}
+                    onClick={() => onSelectChoice(choice, idx)}
                   >
                     {choice.label}
                   </button>

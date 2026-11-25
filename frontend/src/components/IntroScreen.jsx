@@ -1,11 +1,12 @@
 import { useState } from "react";
-import "./introScreen.css";
+import "./IntroScreen.css";
 
 export default function IntroScreen({ profile, onStart }) {
-  const [selectedTopic, setSelectedTopic] = useState(profile.topics[0].id);
+  const [selectedTopic, setSelectedTopic] = useState(profile.topics[0]?.id || "");
 
   function handleSubmit(e) {
     e.preventDefault();
+    if (!selectedTopic) return;
     onStart(selectedTopic);
   }
 
