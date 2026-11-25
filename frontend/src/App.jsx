@@ -1,47 +1,102 @@
-import { useState } from "react";
-import { bobMarleyProfile, dialogueNodes } from "./data/mockDialogue";
-import IntroScreen from "./components/introScreen";
-import ChatScreen from "./components/chatScreen";
+import { useEffect, useState } from "react";
+import IntroScreen from "./components/IntroScreen";
+import ChatScreen from "./components/ChatScreen";
 import "./App.css";
 
 export default function App() {
-  const [currentNodeId, setCurrentNodeId] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [currentNode, setCurrentNode] = useState(null);
   const [messages, setMessages] = useState([]);
   const [unlockedFacts, setUnlockedFacts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  function handleStart(topicId) {
-    const startNode = dialogueNodes[topicId];
-    if (!startNode) return;
-
-    setCurrentNodeId(topicId);
-    setMessages([{ sender: "figure", text: startNode.text }]);
-    setUnlockedFacts(startNode.factUnlocked ? [startNode.factUnlocked] : []);
-  }
-
-  function handleSelectChoice(choice) {
-    const nextNode = dialogueNodes[choice.nextId];
-    if (!nextNode) return;
-
-    setMessages((prev) => [
-      ...prev,
-      { sender: "user", text: choice.label },
-      { sender: "figure", text: nextNode.text }
-    ]);
-
-    if (nextNode.factUnlocked && !unlockedFacts.includes(nextNode.factUnlocked)) {
-      setUnlockedFacts((prev) => [...prev, nextNode.factUnlocked]);
+  useEffect(() => {
+    async function fetchProfile() {
+      try {
+        setLoading(true);
+        setError(null);
+        const res = await fetch("/api/conversation/profile");
+        if (!res.ok) {
+          throw new Error(`Failed to load profile (${res.status})`);
+        }
+        const data = await res.json();
+        setProfile(data);
+      } catch (err) {
+        setError(err.message || "Could not connect to backend server.");
+      } finally {
+        setLoading(false);
+      }
     }
 
-    setCurrentNodeId(choice.nextId);
+    fetchProfile();
+  }, []);
+
+  async function handleStart(topicId) {
+    try {
+      setLoading(true);
+      setError(null);
+      const res = await fetch(`/api/conversation/node/${topicId}`);
+      if (!res.ok) {
+        throw new Error(`Failed to start topic (${res.status})`);
+      }
+      const startNode = await res.json();
+
+      setCurrentNode(startNode);
+      setMessages([{ sender: "figure", text: startNode.text }]);
+      setUnlockedFacts(startNode.factUnlocked ? [startNode.factUnlocked] : []);
+    } catch (err) {
+      setError(err.message || "Could not load conversation node.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleSelectChoice(_choice, choiceIndex) {
+    if (!currentNode) return;
+
+    try {
+      setLoading(true);
+      setError(null);
+      const res = await fetch("/api/conversation/step", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          currentNodeId: currentNode.id,
+          choiceIndex
+        })
+      });
+
+      if (!res.ok) {
+        throw new Error(`Failed to advance conversation (${res.status})`);
+      }
+
+      const { chosenLabel, nextNode } = await res.json();
+
+      setMessages((prev) => [
+        ...prev,
+        { sender: "user", text: chosenLabel },
+        { sender: "figure", text: nextNode.text }
+      ]);
+
+      if (nextNode.factUnlocked && !unlockedFacts.includes(nextNode.factUnlocked)) {
+        setUnlockedFacts((prev) => [...prev, nextNode.factUnlocked]);
+      }
+
+      setCurrentNode(nextNode);
+    } catch (err) {
+      setError(err.message || "Error advancing conversation.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   function handleRestart() {
-    setCurrentNodeId(null);
+    setCurrentNode(null);
     setMessages([]);
     setUnlockedFacts([]);
+    setError(null);
   }
-
-  const currentNode = currentNodeId ? dialogueNodes[currentNodeId] : null;
 
   return (
     <div className="app-shell">
@@ -51,11 +106,26 @@ export default function App() {
       </header>
 
       <main className="app-content">
-        {!currentNode ? (
-          <IntroScreen profile={bobMarleyProfile} onStart={handleStart} />
-        ) : (
+        {error && (
+          <div className="error-banner" role="alert">
+            <p>
+              <strong>Notice:</strong> {error}
+            </p>
+            <button type="button" className="secondary-btn" onClick={() => window.location.reload()}>
+              Reload
+            </button>
+          </div>
+        )}
+
+        {loading && !profile && <p>Loading historical experience...</p>}
+
+        {profile && !currentNode && (
+          <IntroScreen profile={profile} onStart={handleStart} />
+        )}
+
+        {profile && currentNode && (
           <ChatScreen
-            figureName={bobMarleyProfile.name}
+            figureName={profile.name}
             messages={messages}
             currentNode={currentNode}
             unlockedFacts={unlockedFacts}
