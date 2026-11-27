@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import "./ChatScreen.css";
 
 export default function ChatScreen({
@@ -5,15 +6,34 @@ export default function ChatScreen({
   messages,
   currentNode,
   unlockedFacts,
+  latestFact,
+  isTyping,
+  serverOnline,
   onSelectChoice,
   onRestart
 }) {
+  const feedEndRef = useRef(null);
+
+  // Smoothly scroll to bottom whenever messages or typing indicator change
+  useEffect(() => {
+    feedEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, isTyping]);
+
   return (
     <div className="chat-layout">
       <section className="chat-main" aria-label="Conversation">
         <div className="chat-topbar">
           <div>
-            <h2>Conversing with {figureName}</h2>
+            <div className="figure-heading-row">
+              <h2>Conversing with {figureName}</h2>
+              <span
+                className={`status-pill ${serverOnline ? "online" : "offline"}`}
+                aria-live="polite"
+              >
+                <span className="status-dot" />
+                {serverOnline ? "Online" : "Offline"}
+              </span>
+            </div>
             <span className="node-meta">
               {currentNode.era} · {currentNode.location}
             </span>
@@ -27,7 +47,7 @@ export default function ChatScreen({
           {messages.map((msg, index) => (
             <div
               key={index}
-              className={`message-bubble ${
+              className={`message-bubble bubble-enter ${
                 msg.sender === "user" ? "user-msg" : "figure-msg"
               }`}
             >
@@ -37,18 +57,37 @@ export default function ChatScreen({
               <p>{msg.text}</p>
             </div>
           ))}
+
+          {isTyping && (
+            <div
+              className="message-bubble figure-msg typing-bubble bubble-enter"
+              aria-label={`${figureName} is typing`}
+            >
+              <span className="sender-label">{figureName} is typing</span>
+              <div className="typing-dots" aria-hidden="true">
+                <span />
+                <span />
+                <span />
+              </div>
+            </div>
+          )}
+
+          <div ref={feedEndRef} />
         </div>
 
         <div className="choices-panel">
           {!currentNode.isEnding ? (
             <>
-              <h3>Choose your response:</h3>
+              <h3>
+                {isTyping ? `${figureName} is responding...` : "Choose your response:"}
+              </h3>
               <div className="choice-buttons">
                 {currentNode.choices.map((choice, idx) => (
                   <button
                     key={idx}
                     type="button"
                     className="choice-btn"
+                    disabled={isTyping}
                     onClick={() => onSelectChoice(choice, idx)}
                   >
                     {choice.label}
@@ -57,16 +96,18 @@ export default function ChatScreen({
               </div>
             </>
           ) : (
-            <div className="ending-box">
-              <h3>Conversation Path Complete</h3>
-              <p>
-                You uncovered {unlockedFacts.length} historical insight
-                {unlockedFacts.length === 1 ? "" : "s"} in this session.
-              </p>
-              <button type="button" className="primary-btn" onClick={onRestart}>
-                Explore Another Topic
-              </button>
-            </div>
+            !isTyping && (
+              <div className="ending-box bubble-enter">
+                <h3>Conversation Path Complete</h3>
+                <p>
+                  You uncovered {unlockedFacts.length} historical insight
+                  {unlockedFacts.length === 1 ? "" : "s"} in this session.
+                </p>
+                <button type="button" className="primary-btn" onClick={onRestart}>
+                  Explore Another Topic
+                </button>
+              </div>
+            )
           )}
         </div>
       </section>
@@ -85,7 +126,12 @@ export default function ChatScreen({
         <h3>Unlocked Facts ({unlockedFacts.length})</h3>
         <ul className="facts-list">
           {unlockedFacts.map((fact, idx) => (
-            <li key={idx}>{fact}</li>
+            <li
+              key={idx}
+              className={fact === latestFact ? "fact-card fact-new" : "fact-card"}
+            >
+              {fact}
+            </li>
           ))}
         </ul>
       </aside>
